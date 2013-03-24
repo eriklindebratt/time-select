@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="viewport" content="user-scalable=no, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>time-select</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        /*padding: 20px;*/
+        box-sizing: border-box;
+        user-select: none;
+        -webkit-user-select: none
+      }
+      .time-select-wrapper {
+        /*border: 3px red solid;*/
+        position: relative;
+        box-sizing: border-box;
+        height: 500px;
+        padding: 250px 0;
+        font-family: Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .time-select {
+        /*border: 2px green solid;*/
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        /*height: 500px;*/
+        box-sizing: border-box;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .time-select-highlight {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        z-index: 1;
+        width: 100%;
+        height: 32px;
+        margin-top: -16px;
+        background: rgba(0, 0, 0, 0.5);
+      }
+      .time-select-item {
+        /*border: 2px blue solid;*/
+        /*margin: 10px auto 0;*/
+        height: 32px;
+        box-sizing: border-box;
+        font-size: 25px;
+        font-weight: bold;
+        text-align: center;
+        overflow: hidden;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+      }
+      .current-time-indicator {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 1;
+        width: 105%;
+        height: 70px;
+        margin-left: -2.5%;
+        padding: 10px;
+        box-sizing: border-box;
+        overflow: hidden;
+        background: #ccc;
+        opacity: 0.95;
+        text-align: center;
+        font-size: 15px;
+        font-weight: bold;
+        -webkit-box-shadow: 0px 3px 10px rgba(50, 50, 50, 0.75);
+        -moz-box-shadow:    0px 3px 10px rgba(50, 50, 50, 0.75);
+        box-shadow:         0px 3px 10px rgba(50, 50, 50, 0.75);
+      }
+      .current-time-value {
+        display: block;
+        margin: 5px 0 0;
+        font-size: 22px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="js-time-select-wrapper time-select-wrapper">
+      <div class="js-time-select time-select"></div>
+      <div class="js-time-select-highlight time-select-highlight"></div>
+      <div class="js-current-time-indicator current-time-indicator">
+        Selected Time
+        <span class="js-current-time-value current-time-value">...</span>
+      </div>
+    </div>
+    <script>
+      /*******************************************************************************************************
+       * START requestAnimationFrame polyfill
+       * - Thanks to http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
+       *******************************************************************************************************/
+      (function() {
+        var lastTime = 0;
+        var vendors = ['ms', 'moz', 'webkit', 'o'];
+        for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+          window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+          window.cancelRequestAnimationFrame = window[vendors[x]+'CancelRequestAnimationFrame'];
+        }
+
+        if (!window.requestAnimationFrame)
+          window.requestAnimationFrame = function(callback, element) {
+            var currTime = new Date().getTime();
+            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+            var id = window.setTimeout(function() { callback(currTime + timeToCall); }, timeToCall);
+            lastTime = currTime + timeToCall;
+            return id;
+          };
+
+        if (!window.cancelAnimationFrame)
+          window.cancelAnimationFrame = function(id) {
+            clearTimeout(id);
+          };
+      }());
+      /*******************************************************************************************************
+       * END requestAnimationFrame polyfill
+       *******************************************************************************************************/
+
+      (function() {
+        settings = {
+          minutePreciseness: 5,  // every Nth minute
+          containerWidth: window.innerWidth,
+          containerHeight: window.outerHeight,
+          highlightElementHeight: 32,
+          currentTimeIndicatorElementHeight: 70,
+          scrollFactor: 5  // the greater value, the slower scroll animation
+        };
+
+        document.addEventListener("touchstart", function() { settings.isTouchDown = true; });
+        document.addEventListener("touchend", function() { settings.isTouchDown = false; });
+        document.addEventListener("touchcancel", function() { settings.isTouchDown = false; });
+
+        var
+          selectContainers = document.querySelectorAll(".js-time-select"),
+          currentDate = new Date();
+        for (var i = 0; i < selectContainers.length; i++) {  // each time selector in the DOM
+          var
+            selectContainer = selectContainers[i],
+            wrapperEl = selectContainer.parentNode,
+            itemSelectHighlightEl = selectContainer.parentNode.querySelector(".js-time-select-highlight"),
+            currentTimeIndicatorEl = wrapperEl.querySelector(".js-current-time-indicator"),
+            currentTimeIndicatorValueEl = currentTimeIndicatorEl ? currentTimeIndicatorEl.querySelector(".js-current-time-value") : null;
+
+          selectContainer.items = [];
+          selectContainer.selectedIndex = 0;
+          selectContainer.getTimeForItemWithIndex = function(index) {
+            return selectContainer.items[selectContainer.selectedIndex].getTime();
+          };
+          selectContainer.getTime = function() {
+            return selectContainer.getTimeForItemWithIndex(selectContainer.selectedIndex);
+          };
+          selectContainer.setTime = function(dateObj) {
+            console.group("setTime(%o)", dateObj.toTimeString());
+
+            dateObj.setYear(currentDate.getFullYear());
+            dateObj.setMonth(currentDate.getMonth());
+            dateObj.setDate(currentDate.getDate());
+
+            if ("minutePreciseness" in settings) {
+              var
+                minuteDiff = dateObj.getMinutes() % settings.minutePreciseness,
+                roundedMinutes = dateObj.getMinutes() - minuteDiff;
+              if (minuteDiff) {
+                console.log("Rounding %d to %d minutes", dateObj.getMinutes(), roundedMinutes);
+                dateObj.setMinutes(roundedMinutes);
+              }
+            }
+            if ("secondPreciseness" in settings) {
+              var
+                secondDiff = dateObj.getSeconds() % settings.secondPreciseness,
+                roundedSeconds = dateObj.getSeconds() - secondDiff;
+              if (secondDiff) {
+                console.log("Rounding %d to %d seconds", dateObj.getSeconds(), roundedSeconds);
+                dateObj.setSeconds(roundedSeconds);
+              }
+            }
+
+            console.log("Setting time to %o", dateObj.toTimeString());
+
+            // TODO: Refactor into a DOM selector based solution, like `selectContainer.scrollToItemAtTopOffset()`
+            var foundItemIndex = -1;
+            for (var i = 0; i < selectContainer.items.length; i++) {
+              var currentItemTime = selectContainer.items[i].getTime();
+              if (currentItemTime.getHours() === dateObj.getHours()
+                && currentItemTime.getMinutes() === dateObj.getMinutes()
+                && currentItemTime.getSeconds() === dateObj.getSeconds()) { foundItemIndex = i; }
+            }
+
+            if (foundItemIndex < 0) return;
+            selectContainer.scrollToItemAtIndex(foundItemIndex);
+
+            console.groupEnd();
+          };
+          selectContainer.scrollToItemAtIndex = function(index) {
+            //console.log("scrollToItemAtIndex: ", index);
+            if (typeof(index) !== "number" || index < 0 || index >= selectContainer.items.length) return;
+
+            var scrollTopTarget = Math.floor(selectContainer.items[index].offsetTop - settings.containerHeight/2 + settings.highlightElementHeight/2) - 2;
+            selectContainer.isAnimating = true;
+
+            var onScrollCompleted = function() {
+              selectContainer.isAnimating = false;
+              selectContainer.selectedIndex = index;
+
+              if (currentTimeIndicatorValueEl)
+                currentTimeIndicatorValueEl.innerHTML = selectContainer.getTime().toTimeString();
+            };
+
+            if (!window.requestAnimationFrame) {
+              selectContainer.scrollTop = scrollTopTarget;
+              onScrollCompleted();
+              return;
+            }
+
+            /**
+             * Scroll animation, using requestAnimationFrame
+             */
+            var
+              scrollDirection = scrollTopTarget < selectContainer.scrollTop ? "up" : "down",
+              scrollAnimObj;
+            (function scrollAnimLoop() {
+              var currentScrollTop = Math.round(selectContainer.scrollTop);
+              scrollAnimObj = requestAnimationFrame(scrollAnimLoop);
+
+              var
+                diff = selectContainer.scrollTop - scrollTopTarget,
+                target = Math.round(selectContainer.scrollTop - diff/settings.scrollFactor);
+
+              if (scrollDirection === "up" && currentScrollTop <= target
+                || scrollDirection === "down" && currentScrollTop >= target) {
+
+                //console.log("completed scroll animation");
+                window.cancelAnimationFrame && cancelAnimationFrame(scrollAnimObj);
+                window.cancelRequestAnimationFrame && cancelRequestAnimationFrame(scrollAnimObj);
+
+                onScrollCompleted();
+                return;
+              }
+
+              selectContainer.scrollTop = target;
+            })();
+          };
+          selectContainer.scrollToItemAtTopOffset = function(topOffset) {
+            var itemEl = selectContainer.querySelector("[offset-top='"+topOffset+"']");
+            if (!itemEl) return null;
+
+            var itemIndex = ~~itemEl.getAttribute("index");
+            return selectContainer.scrollToItemAtIndex(itemIndex);
+          };
+          selectContainer.snapToItemClosestToCurrentScrollPosition = function() {
+            var itemOffsetTop = selectContainer.scrollTop + settings.containerHeight/2 - settings.highlightElementHeight/2;
+
+            // round to closest
+            itemOffsetTop = Math.round(itemOffsetTop / settings.highlightElementHeight) * settings.highlightElementHeight;
+            if ("ontouchstart" in window) itemOffsetTop += 2;
+            else itemOffsetTop -= 2;
+
+            selectContainer.scrollToItemAtTopOffset(itemOffsetTop);
+          };
+
+          /**
+           * Construct DOM content, accessor methods and event handlers
+           */
+          var itemIndex = 0;
+          for (var hour = 0; hour <= 23; hour++) {  // for every hour
+            for (var minute = 0; minute < 60; minute++) {  // for every minute
+              if (minute % settings.minutePreciseness !== 0) continue;
+
+              (function() {
+                var
+                  item = document.createElement("div"),
+                  itemDate = new Date(
+                    currentDate.getFullYear(),
+                    currentDate.getMonth(),
+                    currentDate.getDate(),
+                    hour,
+                    minute,
+                    0
+                  );
+
+                item.getTime = function() { return itemDate; };
+                item.className = "js-time-select-item time-select-item";
+                item.style.height = settings.highlightElementHeight+"px";
+                item.setAttribute("index", itemIndex);
+
+                //item.innerHTML = "<span style='float: left'>i: "+itemIndex+"</span>";  // for debug
+                item.innerHTML = itemDate.toTimeString().split(" ")[0].slice(0, -3);
+
+                var onClickCallback = function(e) {
+                  selectContainer.setTime(e.target.getTime());
+                };
+                /*if ("ontouchstart" in window) {
+                  item.addEventListener("touchend", function(e) {
+                    onClickCallback(e);
+                  });
+                } else {*/
+                  item.addEventListener("click", function(e) {
+                    e.preventDefault();
+                    onClickCallback(e);
+                  });
+                //}
+                selectContainer.appendChild(item);
+
+                (function() {
+                  setTimeout(function() {
+                    item.setAttribute("offset-top", item.offsetTop);
+                  }, 1000);
+                })();
+
+                selectContainer.items.push(item);
+                itemIndex++;
+              })();
+            }
+          }
+
+          wrapperEl.style.height = settings.containerHeight+"px";
+          wrapperEl.style.paddingTop = settings.containerHeight/2+"px";// + settings.currentTimeIndicatorElementHeight + "px";
+          wrapperEl.style.paddingBottom = settings.containerHeight/2+"px";
+
+          selectContainer.style.height = settings.containerHeight+"px";// - settings.currentTimeIndicatorElementHeight + "px";
+          //selectContainer.style.top = settings.currentTimeIndicatorElementHeight+"px";
+          selectContainer.style.paddingTop = (settings.containerHeight/2-settings.highlightElementHeight/2)+"px";
+          selectContainer.style.paddingBottom = (settings.containerHeight/2-settings.highlightElementHeight/2)+"px";
+
+          itemSelectHighlightEl.style.height = settings.highlightElementHeight+"px";
+          itemSelectHighlightEl.style.marginTop = -settings.highlightElementHeight/2+"px";
+
+          if (currentTimeIndicatorEl)
+            currentTimeIndicatorEl.style.height = settings.currentTimeIndicatorElementHeight+"px";
+
+          var tmpDate = new Date();
+          tmpDate.setSeconds(0);
+          selectContainer.setTime(tmpDate);
+
+          selectContainer.addEventListener("scroll", function() {
+            if (settings.isTouchDown) return;
+
+            if ("ontouchstart" in window) {
+              if (!selectContainer.isAnimating) selectContainer.snapToItemClosestToCurrentScrollPosition();
+              return;
+            }
+
+            if (selectContainer.isAnimatingScrollCheckIntervalObj)
+              clearInterval(selectContainer.isAnimatingScrollCheckIntervalObj);
+
+            selectContainer.isAnimatingScrollCheckIntervalObj = setInterval(function() {
+              if (!selectContainer.isAnimating) {
+                clearInterval(selectContainer.isAnimatingScrollCheckIntervalObj);
+                selectContainer.snapToItemClosestToCurrentScrollPosition();
+              }
+            }, 150);
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
