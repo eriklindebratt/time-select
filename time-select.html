@@ -163,6 +163,9 @@
           selectContainer.getTime = function() {
             return selectContainer.getTimeForItemWithIndex(selectContainer.selectedIndex);
           };
+          selectContainer.setDateFromUnixTimestamp = function(unixTimestamp) {
+            return selectContainer.setTime(new Date(unixTimestamp));
+          };
           selectContainer.setTime = function(dateObj) {
             console.group("setTime(%o)", dateObj.toTimeString());
 
