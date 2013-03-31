@@ -15,5 +15,4 @@ selectorEl.getTime();  // returns a Date object
 ```
 
 ## Demo
-
-http://7165e32.5minfork.com/time-select.html
+http://time-select.herokuapp.com
