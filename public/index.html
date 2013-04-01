@@ -147,13 +147,17 @@
         var
           selectContainers = document.querySelectorAll(".js-time-select"),
           currentDate = new Date();
-        for (var i = 0; i < selectContainers.length; i++) {  // each time selector in the DOM
+        for (var i = 0; i < selectContainers.length; i++) {  // each "time selector" in the DOM
           var
             selectContainer = selectContainers[i],
             wrapperEl = selectContainer.parentNode,
             itemSelectHighlightEl = selectContainer.parentNode.querySelector(".js-time-select-highlight"),
             currentTimeIndicatorEl = wrapperEl.querySelector(".js-current-time-indicator"),
-            currentTimeIndicatorValueEl = currentTimeIndicatorEl ? currentTimeIndicatorEl.querySelector(".js-current-time-value") : null;
+            currentTimeIndicatorValueEl = currentTimeIndicatorEl ? currentTimeIndicatorEl.querySelector(".js-current-time-value") : null,
+            onSelectContainerReady = function() {
+              if ("ontouchstart" in window)
+                document.location.href = "time-select-ready://?selectorIndex="+i;
+            };
 
           selectContainer.items = [];
           selectContainer.selectedIndex = 0;
@@ -217,7 +221,7 @@
 
             selectContainer.scrollToItemAtIndex(foundItemIndex);
             if ("ontouchstart" in window)
-              document.location.href = "time-select-change://"+selectContainer.getUnixTimestamp();
+              document.location.href = "time-select-change://?unixTimestamp="+selectContainer.getUnixTimestamp();
 
             console.groupEnd();
           };
@@ -361,10 +365,6 @@
           if (currentTimeIndicatorEl)
             currentTimeIndicatorEl.style.height = settings.currentTimeIndicatorElementHeight+"px";
 
-          var tmpDate = new Date();
-          tmpDate.setSeconds(0);
-          selectContainer.setTime(tmpDate);
-
           selectContainer.addEventListener("scroll", function() {
             if (settings.isTouchDown) return;
 
@@ -383,6 +383,12 @@
               }
             }, 150);
           });
+
+          // set initial time - should this really be done, or should it always require to be set?
+          //var tmpDate = new Date();
+          //tmpDate.setSeconds(0);
+          //selectContainer.setTime(tmpDate);
+          onSelectContainerReady();
         }
       })();
     </script>
