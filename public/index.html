@@ -163,7 +163,17 @@
           selectContainer.getTime = function() {
             return selectContainer.getTimeForItemWithIndex(selectContainer.selectedIndex);
           };
-          selectContainer.setDateFromUnixTimestamp = function(unixTimestamp) {
+          selectContainer.getUnixTimestamp = function() {
+            var
+              dateObj = selectContainer.getTime(),
+              unixTimestamp = dateObj.getTime();
+
+            unixTimestamp /= 1000;
+            //alert("timestampStr: "+unixTimestamp.toString());
+            return unixTimestamp.toString();
+          };
+          selectContainer.setTimeFromUnixTimestamp = function(unixTimestamp) {
+            unixTimestamp *= 1000;
             return selectContainer.setTime(new Date(unixTimestamp));
           };
           selectContainer.setTime = function(dateObj) {
@@ -204,7 +214,10 @@
             }
 
             if (foundItemIndex < 0) return;
+
             selectContainer.scrollToItemAtIndex(foundItemIndex);
+            if ("ontouchstart" in window)
+              document.location.href = "time-select-change://"+selectContainer.getUnixTimestamp();
 
             console.groupEnd();
           };
@@ -213,14 +226,17 @@
             if (typeof(index) !== "number" || index < 0 || index >= selectContainer.items.length) return;
 
             var scrollTopTarget = Math.floor(selectContainer.items[index].offsetTop - settings.containerHeight/2 + settings.highlightElementHeight/2) - 2;
+
             selectContainer.isAnimating = true;
+            selectContainer.selectedIndex = index;
+            if (currentTimeIndicatorValueEl)
+              currentTimeIndicatorValueEl.innerHTML = selectContainer.getTime().toTimeString();
 
             var onScrollCompleted = function() {
               selectContainer.isAnimating = false;
-              selectContainer.selectedIndex = index;
-
-              if (currentTimeIndicatorValueEl)
-                currentTimeIndicatorValueEl.innerHTML = selectContainer.getTime().toTimeString();
+              //selectContainer.selectedIndex = index;
+              //if (currentTimeIndicatorValueEl)
+                //currentTimeIndicatorValueEl.innerHTML = selectContainer.getTime().toTimeString();
             };
 
             if (!window.requestAnimationFrame) {
