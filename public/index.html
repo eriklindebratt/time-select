@@ -44,27 +44,39 @@
         -webkit-overflow-scrolling: touch;
       }
       .time-select-highlight {
+        /*display: none;*/
         position: absolute;
         left: 0;
         top: 50%;
         z-index: 1;
         width: 100%;
-        height: 32px;
-        margin-top: -16px;
+        height: 50px;
+        margin-top: -25px;
         background: rgba(0, 0, 0, 0.5);
       }
       .time-select-item {
         /*border: 2px blue solid;*/
         /*margin: 10px auto 0;*/
-        height: 32px;
+        height: 50px;
+        line-height: 50px;
         box-sizing: border-box;
-        font-size: 25px;
+        font-size: 35px;
         font-weight: bold;
         text-align: center;
         overflow: hidden;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+        /*transition: transform 100ms ease;
+        -webkit-transition: -webkit-transform 100ms ease;*/
+      }
+      .time-select-item.active {
+        position: relative;
+        z-index: 2;
+        color: yellow;
+        /*transform: scale(1.5, 1.5);
+        -webkit-transform: scale(1.5, 1.5);*/
       }
       .current-time-indicator {
+        /*display: none;*/
         position: absolute;
         left: 0;
         top: 0;
@@ -136,7 +148,7 @@
           minutePreciseness: 5,  // every Nth minute
           containerWidth: window.innerWidth,
           containerHeight: window.outerHeight,
-          highlightElementHeight: 32,
+          highlightElementHeight: 50,
           currentTimeIndicatorElementHeight: 70,
           scrollFactor: 5,  // the greater value, the slower scroll animation
           sendIOSCommands: false  // set to `true` to send "time-select-ready://" and "time-select-change://" commands that an iOS UIWebView may listen to
@@ -161,10 +173,10 @@
                 document.location.href = "time-select-ready://?selectorIndex="+i;
             };
 
-          selectContainer.items = [];
+          selectContainer.itemEls = [];
           selectContainer.selectedIndex = 0;
           selectContainer.getTimeForItemWithIndex = function(index) {
-            return selectContainer.items[selectContainer.selectedIndex].getTime();
+            return selectContainer.itemEls[selectContainer.selectedIndex].getTime();
           };
           selectContainer.getTime = function() {
             return selectContainer.getTimeForItemWithIndex(selectContainer.selectedIndex);
@@ -212,8 +224,8 @@
 
             // TODO: Refactor into a DOM selector based solution, like `selectContainer.scrollToItemAtTopOffset()`
             var foundItemIndex = -1;
-            for (var i = 0; i < selectContainer.items.length; i++) {
-              var currentItemTime = selectContainer.items[i].getTime();
+            for (var i = 0; i < selectContainer.itemEls.length; i++) {
+              var currentItemTime = selectContainer.itemEls[i].getTime();
               if (currentItemTime.getHours() === dateObj.getHours()
                 && currentItemTime.getMinutes() === dateObj.getMinutes()
                 && currentItemTime.getSeconds() === dateObj.getSeconds()) { foundItemIndex = i; }
@@ -229,9 +241,9 @@
           };
           selectContainer.scrollToItemAtIndex = function(index) {
             //console.log("scrollToItemAtIndex: ", index);
-            if (typeof(index) !== "number" || index < 0 || index >= selectContainer.items.length) return;
+            if (typeof(index) !== "number" || index < 0 || index >= selectContainer.itemEls.length) return;
 
-            var scrollTopTarget = Math.floor(selectContainer.items[index].offsetTop - settings.containerHeight/2 + settings.highlightElementHeight/2) - 2;
+            var scrollTopTarget = Math.floor(selectContainer.itemEls[index].offsetTop - settings.containerHeight/2 + settings.highlightElementHeight/2) - 2;
 
             selectContainer.isAnimating = true;
             selectContainer.selectedIndex = index;
@@ -243,6 +255,13 @@
               //selectContainer.selectedIndex = index;
               //if (currentTimeIndicatorValueEl)
                 //currentTimeIndicatorValueEl.innerHTML = selectContainer.getTime().toTimeString();
+
+              for (var i = 0; i < selectContainer.itemEls.length; i++) {
+                var itemEl = selectContainer.itemEls[i];
+                i === selectContainer.selectedIndex
+                  ? itemEl.classList.add("active")
+                  : itemEl.classList.remove("active");
+              };
             };
 
             if (!window.requestAnimationFrame) {
@@ -268,7 +287,6 @@
               if (scrollDirection === "up" && currentScrollTop <= target
                 || scrollDirection === "down" && currentScrollTop >= target) {
 
-                //console.log("completed scroll animation");
                 window.cancelAnimationFrame && cancelAnimationFrame(scrollAnimObj);
                 window.cancelRequestAnimationFrame && cancelRequestAnimationFrame(scrollAnimObj);
 
@@ -284,15 +302,18 @@
               foundItemEl,
               currentOffsetTop = null;
 
-            selectContainer.items.forEach(function(itemEl) {
-              if (itemEl.offsetTop < topOffset)
-                return foundItemEl = itemEl;
+            selectContainer.itemEls.forEach(function(itemEl) {
+              if (itemEl.offsetTop <= topOffset)
+                foundItemEl = itemEl;
 
               else if ((itemEl.offsetTop + itemEl.offsetHeight) < topOffset)
-                return foundItemEl = itemEl;
+                foundItemEl = itemEl;
 
-              else if (itemEl.offsetTop === topOffset)
-                return foundItemEl = itemEl;
+              if (foundItemEl) {
+                var nextItemEl = foundItemEl.nextSibling;
+                if (Math.abs(nextItemEl.offsetTop - topOffset) < Math.abs(foundItemEl.offsetTop - topOffset))
+                  foundItemEl = nextItemEl;
+              }
             });
 
             //var foundItemEl = selectContainer.querySelector("[offset-top='"+topOffset+"']");
@@ -363,7 +384,7 @@
                   }, 1000);
                 })();
 
-                selectContainer.items.push(item);
+                selectContainer.itemEls.push(item);
                 itemIndex++;
               })();
             }
@@ -378,8 +399,10 @@
           selectContainer.style.paddingTop = (settings.containerHeight/2-settings.highlightElementHeight/2)+"px";
           selectContainer.style.paddingBottom = (settings.containerHeight/2-settings.highlightElementHeight/2)+"px";
 
-          itemSelectHighlightEl.style.height = settings.highlightElementHeight+"px";
-          itemSelectHighlightEl.style.marginTop = -settings.highlightElementHeight/2+"px";
+          if (itemSelectHighlightEl) {
+            itemSelectHighlightEl.style.height = settings.highlightElementHeight+"px";
+            itemSelectHighlightEl.style.marginTop = -settings.highlightElementHeight/2+"px";
+          }
 
           if (currentTimeIndicatorEl)
             currentTimeIndicatorEl.style.height = settings.currentTimeIndicatorElementHeight+"px";
@@ -396,11 +419,15 @@
               clearInterval(selectContainer.isAnimatingScrollCheckIntervalObj);
 
             selectContainer.isAnimatingScrollCheckIntervalObj = setInterval(function() {
-              if (!selectContainer.isAnimating) {
-                clearInterval(selectContainer.isAnimatingScrollCheckIntervalObj);
-                selectContainer.snapToItemClosestToCurrentScrollPosition();
-              }
-            }, 150);
+              if (selectContainer.isAnimating) return;
+
+              clearInterval(selectContainer.isAnimatingScrollCheckIntervalObj);
+              selectContainer.snapToItemClosestToCurrentScrollPosition();
+            }, 200);
+          });
+
+          selectContainer.addEventListener("touchend", function() {
+            selectContainer.snapToItemClosestToCurrentScrollPosition();
           });
 
           // set initial time - should this really be done, or should it always require to be set?
