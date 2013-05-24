@@ -19,8 +19,9 @@
         /*padding: 20px;*/
         box-sizing: border-box;
         user-select: none;
-        -webkit-user-select: none
+        -webkit-user-select: none;
       }
+      ::-webkit-scrollbar { display: none }
       .time-select-wrapper {
         /*border: 3px red solid;*/
         position: relative;
@@ -137,7 +138,8 @@
           containerHeight: window.outerHeight,
           highlightElementHeight: 32,
           currentTimeIndicatorElementHeight: 70,
-          scrollFactor: 5  // the greater value, the slower scroll animation
+          scrollFactor: 5,  // the greater value, the slower scroll animation
+          sendIOSCommands: false  // set to `true` to send "time-select-ready://" and "time-select-change://" commands that an iOS UIWebView may listen to
         };
 
         document.addEventListener("touchstart", function() { settings.isTouchDown = true; });
@@ -155,7 +157,7 @@
             currentTimeIndicatorEl = wrapperEl.querySelector(".js-current-time-indicator"),
             currentTimeIndicatorValueEl = currentTimeIndicatorEl ? currentTimeIndicatorEl.querySelector(".js-current-time-value") : null,
             onSelectContainerReady = function() {
-              if ("ontouchstart" in window)
+              if (settings.sendIOSCommands)
                 document.location.href = "time-select-ready://?selectorIndex="+i;
             };
 
@@ -220,7 +222,7 @@
             if (foundItemIndex < 0) return;
 
             selectContainer.scrollToItemAtIndex(foundItemIndex);
-            if ("ontouchstart" in window)
+            if (settings.sendIOSCommands)
               document.location.href = "time-select-change://?unixTimestamp="+selectContainer.getUnixTimestamp();
 
             console.groupEnd();
@@ -278,10 +280,26 @@
             })();
           };
           selectContainer.scrollToItemAtTopOffset = function(topOffset) {
-            var itemEl = selectContainer.querySelector("[offset-top='"+topOffset+"']");
-            if (!itemEl) return null;
+            var
+              foundItemEl,
+              currentOffsetTop = null;
 
-            var itemIndex = ~~itemEl.getAttribute("index");
+            selectContainer.items.forEach(function(itemEl) {
+              if (itemEl.offsetTop < topOffset)
+                return foundItemEl = itemEl;
+
+              else if ((itemEl.offsetTop + itemEl.offsetHeight) < topOffset)
+                return foundItemEl = itemEl;
+
+              else if (itemEl.offsetTop === topOffset)
+                return foundItemEl = itemEl;
+            });
+
+            //var foundItemEl = selectContainer.querySelector("[offset-top='"+topOffset+"']");
+
+            if (!foundItemEl) return null;
+
+            var itemIndex = ~~foundItemEl.getAttribute("index");
             return selectContainer.scrollToItemAtIndex(itemIndex);
           };
           selectContainer.snapToItemClosestToCurrentScrollPosition = function() {
@@ -289,6 +307,7 @@
 
             // round to closest
             itemOffsetTop = Math.round(itemOffsetTop / settings.highlightElementHeight) * settings.highlightElementHeight;
+
             if ("ontouchstart" in window) itemOffsetTop += 2;
             else itemOffsetTop -= 2;
 
