@@ -311,6 +311,8 @@
 
               if (foundItemEl) {
                 var nextItemEl = foundItemEl.nextSibling;
+                if (!nextItemEl) return;
+
                 if (Math.abs(nextItemEl.offsetTop - topOffset) < Math.abs(foundItemEl.offsetTop - topOffset))
                   foundItemEl = nextItemEl;
               }
